@@ -1,0 +1,48 @@
+---
+description: Convenciones de componentes React y frontend en apps/web (Next.js App Router + Tailwind)
+globs: apps/web/**/*.tsx
+alwaysApply: false
+---
+
+# React / Next.js (apps/web)
+
+App Router en `apps/web/src/app`. Componentes funcionales, sin clases.
+
+## Server vs Client
+
+Server Components por defecto. `"use client"` solo cuando hay estado, efectos, handlers o `localStorage` (login, lista, detalle de flag).
+
+## Acceso a datos
+
+Todo fetch pasa por `src/lib/api.ts`. Los componentes no llaman `fetch` directo ni arman URLs ni headers.
+
+```tsx
+// ❌ MAL
+const res = await fetch("http://localhost:8787/flags");
+
+// ✅ BIEN
+import { listFlags } from "@/lib/api";
+const { items } = await listFlags();
+```
+
+El token vive en `localStorage` bajo `ff_token` y lo inyecta `src/lib/api.ts` como `Authorization: Bearer`. Ningún componente lo lee para armar requests.
+
+## Estado
+
+- `useState` local; nada de librerías de estado global en el MVP.
+- Al editar reglas se trabaja sobre un **draft** por ambiente y se persiste al guardar; no se muta el objeto `flag` del servidor.
+- Tras un guardado exitoso, refrescar con la respuesta de la API (que ya trae `lastChange`).
+
+## Guardas y confirmación
+
+- Página autenticada sin token → `router.replace("/")`.
+- Guardar reglas en `production` **debe** abrir modal de confirmación; solo al confirmar se llama la API con `confirmProduction: true`. Cancelar no dispara request.
+- Con lifecycle `deprecado` o `eliminado`, los controles de reglas van `disabled`.
+
+## Estilos
+
+Tailwind con utilidades en el JSX; los tokens de color viven como CSS variables en `globals.css` (`var(--accent)`, `var(--border)`). Sin CSS Modules ni styled-components.
+
+## UI mínima
+
+Mostrar siempre: lifecycle, `safeDefault`, reglas del ambiente activo, último cambio (`by` + fecha) y exposición teórica `~{rolloutPercent}%` (valor configurado, nunca tráfico medido). Los errores de API se renderizan visibles, no solo en consola.

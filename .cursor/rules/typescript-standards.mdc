@@ -1,0 +1,54 @@
+---
+description: Estándares de TypeScript: tipado estricto, tipos compartidos en packages/domain, prohibición de any
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript
+
+`strict: true` en `tsconfig.base.json` y todos los paquetes lo extienden. No se relaja por archivo.
+
+## Prohibido `any`
+
+Usá `unknown` + narrowing, o un tipo del dominio. `as` solo para estrechar tras validar.
+
+```ts
+// ❌ MAL
+catch (e: any) { return c.json({ error: e.message }, 500); }
+
+// ✅ BIEN
+catch (e) {
+  const err = e as Error & { status?: number };
+  return c.json({ error: err.message }, err.status ?? 500);
+}
+```
+
+No usar `@ts-ignore`; si hace falta, `@ts-expect-error` con comentario del motivo.
+
+## Tipos compartidos en `@ff/domain`
+
+`Environment`, `Lifecycle`, `SafeDefault`, `OverrideMode`, `TenantOverride`, `EnvironmentRules`, `FeatureFlag`, `EvaluateResult` se definen **una sola vez** en `packages/domain/src/types.ts`. `apps/api`, `apps/web` y `packages/db` los importan; no los redeclaran.
+
+```ts
+// ❌ MAL — duplicar el contrato en apps/web
+type Env = "dev" | "staging" | "prod";
+
+// ✅ BIEN
+import type { Environment, FeatureFlag } from "@ff/domain";
+```
+
+## Unions en vez de strings sueltos
+
+Los valores de dominio son union types con constante iterable (`ENVIRONMENTS`, `LIFECYCLES`), nunca `string`.
+
+## Bordes tipados
+
+- Todo body HTTP se valida con zod en `apps/api` antes de tocar el dominio; el tipo sale del parse, no de un cast.
+- Las filas de Drizzle se mapean explícitamente a tipos de `@ff/domain` en el repo (`row.lifecycle as Lifecycle` solo en esa capa de mapeo).
+- Funciones exportadas de `@ff/domain` llevan tipo de retorno explícito.
+
+## Imports
+
+- `import type { … }` para tipos.
+- Imports relativos **sin** extensión `.js` (los resuelven bundler/tsx/Next).
+- Nada de `require`; ESM en todo el repo.
