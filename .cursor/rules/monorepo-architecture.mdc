@@ -1,0 +1,51 @@
+---
+description: Arquitectura del monorepo Feature Flags y separación de responsabilidades entre apps y packages
+alwaysApply: true
+---
+
+# Arquitectura del monorepo
+
+Fuente de verdad: `docs/prds/PRD_FEATURE_FLAGS.md` y `docs/specs/*`. Si el código contradice al PRD, gana el PRD.
+
+## Responsabilidades
+
+| Paquete | Rol | Puede importar |
+|---------|-----|----------------|
+| `packages/domain` (`@ff/domain`) | Tipos + lógica pura: evaluador, hash sticky, lifecycle, `TtlCache`. **Cero I/O** | nada del repo |
+| `packages/db` (`@ff/db`) | Schema Drizzle, cliente libSQL, migraciones | `@ff/domain` (solo tipos) |
+| `apps/api` (`@ff/api`) | Hono: rutas, validación zod, auth demo, repositorio | `@ff/domain`, `@ff/db` |
+| `apps/web` (`@ff/web`) | Next.js App Router + Tailwind: panel operador | `@ff/domain` (solo tipos) |
+
+## Reglas de dependencia (obligatorias)
+
+- `@ff/domain` no importa `@ff/db`, `hono`, `next`, `fs` ni `fetch`. Si necesitás I/O, va en `apps/api`.
+- `@ff/web` **nunca** importa `@ff/db` ni toca SQLite: habla con la API por HTTP (`src/lib/api.ts`).
+- Las queries Drizzle viven en `apps/api/src/repo.ts` (o `packages/db`), nunca en handlers de ruta ni en componentes React.
+- La precedencia de evaluación (empresa → % → default) se implementa **una sola vez**, en `@ff/domain`. La API no la reimplementa.
+
+```ts
+// ❌ MAL — lógica de negocio en la ruta
+app.post("/evaluate", async (c) => {
+  if (override?.mode === "force_off") return c.json({ enabled: false });
+});
+
+// ✅ BIEN — la ruta orquesta, el dominio decide
+app.post("/evaluate", async (c) => {
+  const flag = await getFlag(body.flagKey);
+  return c.json(evaluateFlag(flag, ctx));
+});
+```
+
+## Invariantes de producto
+
+- Flags booleanas con `key` snake_case; nada de config arbitraria.
+- Targeting solo por ambiente + `tenantId` + rollout %. Sin región, plan ni reglas AND/OR.
+- Auth = usuario demo (`demo`/`demo`). No agregar OAuth, roles ni RBAC.
+- Persistencia: SQLite/libSQL local (`data/feature-flags.db`).
+- Cambios en `production` exigen confirmación explícita; la API valida `confirmProduction`.
+
+## Convenciones
+
+- Package manager: **pnpm** workspaces, sin Turborepo. Deps internas con `workspace:*`.
+- Puertos fijos: API `8787`, Web `3000`.
+- Toda escritura que cambie flags o reglas escribe en `audit_log` (quién, cuándo, qué).
