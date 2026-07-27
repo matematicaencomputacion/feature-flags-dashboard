@@ -64,6 +64,10 @@ export async function logout() {
   }
 }
 
+export async function getMe() {
+  return request<{ user: { username: string } }>("/auth/me");
+}
+
 export async function listFlags() {
   return request<{ items: FeatureFlag[] }>("/flags");
 }

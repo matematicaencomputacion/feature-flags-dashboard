@@ -18,12 +18,8 @@ export default function FlagsPage() {
   }
 
   useEffect(() => {
-    if (!localStorage.getItem("ff_token")) {
-      router.replace("/");
-      return;
-    }
     refresh().catch((e) => setError(e.message));
-  }, [router]);
+  }, []);
 
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

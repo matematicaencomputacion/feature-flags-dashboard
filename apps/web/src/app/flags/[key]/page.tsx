@@ -9,7 +9,7 @@ import type {
 } from "@ff/domain";
 import { ENVIRONMENTS } from "@ff/domain";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getFlag, updateFlagMeta, updateRules } from "@/lib/api";
 
@@ -21,7 +21,6 @@ const NEXT_LIFECYCLE: Partial<Record<Lifecycle, Lifecycle>> = {
 
 export default function FlagDetailPage() {
   const params = useParams<{ key: string }>();
-  const router = useRouter();
   const key = decodeURIComponent(params.key);
   const [flag, setFlag] = useState<FeatureFlag | null>(null);
   const [env, setEnv] = useState<Environment>("dev");
@@ -37,10 +36,6 @@ export default function FlagDetailPage() {
   const [draft, setDraft] = useState<EnvironmentRules | null>(null);
 
   useEffect(() => {
-    if (!localStorage.getItem("ff_token")) {
-      router.replace("/");
-      return;
-    }
     getFlag(key)
       .then((d) => {
         setFlag(d.flag);
@@ -48,7 +43,7 @@ export default function FlagDetailPage() {
         setDraft({ ...r, overrides: [...r.overrides] });
       })
       .catch((e) => setError(e.message));
-  }, [key, router]);
+  }, [key]);
 
   useEffect(() => {
     if (!flag) return;
