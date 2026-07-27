@@ -1,0 +1,51 @@
+---
+description: Testing con Vitest: qué se testea, dónde viven los tests y criterios mínimos
+globs: **/*.{test,spec}.{ts,tsx}
+alwaysApply: false
+---
+
+# Testing (Vitest)
+
+Runner único: **Vitest** (`vitest run` en scripts, watch solo local). No Jest.
+
+## Dónde viven
+
+Colocados junto al código: `packages/domain/src/evaluate.test.ts`, no en un `__tests__/` aparte. Se ejecutan con `pnpm test` desde la raíz.
+
+## Qué se testea
+
+| Capa | Cobertura esperada |
+|------|--------------------|
+| `packages/domain` | Obligatoria: precedencia, rollout sticky, lifecycle, fallback, TTL |
+| `apps/api` | Handlers con reglas propias (validación, `confirmProduction`, 4xx) |
+| `packages/db` | Solo helpers de mapeo; no se testea SQLite contra red |
+| `apps/web` | No hay tests de UI en el MVP; se valida por criterios de aceptación |
+
+## Casos mínimos del evaluador (no borrar)
+
+- `force_off` con `rolloutPercent: 100` ⇒ `enabled: false`, reason `force_off`.
+- `force_on` con `rolloutPercent: 0` ⇒ `enabled: true`, reason `force_on`.
+- Mismo `userId` al 50% ⇒ mismo resultado en llamadas repetidas (sticky).
+- Con muchos `userId` al 50% ⇒ hay al menos un in y un out.
+- `fetchFailed` ⇒ devuelve `safeDefault`.
+- `canTransitionLifecycle` solo avanza un paso; `allowsNewRules("deprecado")` es `false`.
+
+## Cómo se escriben
+
+Determinista: sin `Date.now()` real en aserciones de tiempo, sin `Math.random`, sin red. Para TTL, usar `vi.useFakeTimers()`; para HTTP, mock de `fetch`.
+
+```ts
+// ❌ MAL — depende del reloj real
+await new Promise((r) => setTimeout(r, 46_000));
+
+// ✅ BIEN
+vi.useFakeTimers();
+vi.advanceTimersByTime(46_000);
+expect(cache.get("k")).toBeUndefined();
+```
+
+Un `describe` por unidad, nombres en español que describan la regla de negocio (`"force_off gana sobre % = 100"`). Cada test afirma una cosa.
+
+## Criterio de merge
+
+`pnpm test` en verde. Todo bug de evaluación se arregla con un test que falle primero. Nuevas reglas de negocio del PRD entran con su test asociado.
