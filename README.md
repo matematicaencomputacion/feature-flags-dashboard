@@ -54,7 +54,7 @@ Requiere **Node ≥ 22.13**: pnpm 11 usa `node:sqlite`, que no existe en Node 20
 ```bash
 pnpm install
 pnpm test           # dominio + api
-pnpm run typecheck  # tsc --noEmit en domain, db y api
+pnpm run typecheck  # tsc --noEmit en domain, db, api (tests incluidos) y web
 pnpm run build
 ```
 

@@ -190,20 +190,19 @@ describe("HTTP", () => {
 
   it("evaluate: el rollout es terminal end-to-end (defaultOn=true, 10%)", async () => {
     const results = await Promise.all(
-      Array.from({ length: 60 }, (_, i) =>
-        app
-          .request("/evaluate", {
-            method: "POST",
-            headers: json,
-            body: JSON.stringify({
-              flagKey: "billing_v2",
-              environment: "production",
-              tenantId: "sin_override",
-              userId: `u-${i}`,
-            }),
-          })
-          .then((r) => r.json() as Promise<{ enabled: boolean }>),
-      ),
+      Array.from({ length: 60 }, async (_, i) => {
+        const res = await app.request("/evaluate", {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({
+            flagKey: "billing_v2",
+            environment: "production",
+            tenantId: "sin_override",
+            userId: `u-${i}`,
+          }),
+        });
+        return (await res.json()) as { enabled: boolean };
+      }),
     );
     const on = results.filter((r) => r.enabled).length;
     expect(on).toBeGreaterThan(0);
