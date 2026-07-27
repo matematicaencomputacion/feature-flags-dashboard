@@ -89,15 +89,16 @@ describe("sesiones — barrido", () => {
   });
 
   it("el intervalo barre sin que nadie consulte la sesión", () => {
-    const vencida = createSession("demo");
+    // Sin guardar el token: consultarlo la borraría y arruinaría lo que mide el test.
+    createSession("demo");
     vi.advanceTimersByTime(TTL_MS + 1);
     const vigente = createSession("demo");
 
     startSessionSweep(1_000);
     vi.advanceTimersByTime(1_000);
 
-    // Nunca se consultó `vencida`, así que sólo el barrido pudo sacarla: que no
-    // quede nada por barrer lo demuestra.
+    // Nunca se consultó la sesión vencida, así que sólo el barrido pudo sacarla:
+    // que no quede nada por barrer lo demuestra.
     expect(sweepExpiredSessions()).toBe(0);
     expect(getSessionUser(vigente)).toBe("demo");
 
