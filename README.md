@@ -38,6 +38,10 @@ docs/prds         PRD (fuente de verdad de producto)
   recibe el cambio invalida el suyo y las demás sirven la definición vieja hasta
   que expire el TTL. Resolverlo pide un caché compartido o un canal de
   invalidación entre instancias.
+- **Las sesiones viven en memoria del proceso.** Expiran a las 8 horas de creadas
+  (`SESSION_TTL_MS`), sin renovarse por uso, y un barrido cada 10 minutos saca las
+  vencidas. Reiniciar la API desloguea a todo el mundo, y con varias instancias el
+  token emitido por una no sirve en las otras.
 
 ## Setup
 
