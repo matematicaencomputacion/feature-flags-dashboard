@@ -17,6 +17,7 @@ import {
 } from "@ff/domain";
 import { and, desc, eq } from "drizzle-orm";
 import { badRequest, notFound } from "./errors";
+import { invalidateFlag } from "./flag-cache";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
@@ -187,6 +188,10 @@ export async function createFlag(input: {
     });
   });
 
+  // Descarta la entrada negativa: /evaluate pudo cachear esta key como
+  // inexistente antes de que se creara.
+  invalidateFlag(input.key);
+
   const flag = await getFlag(input.key);
   if (!flag) throw new Error("Failed to load created flag");
   return flag;
@@ -238,6 +243,8 @@ export async function updateFlagMeta(input: {
         summary: summaries.join("; ") || "Updated flag",
       });
     });
+
+    invalidateFlag(input.key);
   }
 
   const flag = await getFlag(input.key);
@@ -330,6 +337,8 @@ export async function upsertEnvironmentRules(input: {
       summary,
     });
   });
+
+  invalidateFlag(input.key);
 
   const flag = await getFlag(input.key);
   if (!flag) throw new Error("Not found after rules update");

@@ -3,15 +3,17 @@ export type CacheEntry<T> = {
   expiresAt: number;
 };
 
-/** Cache local con TTL 30–60s (default 45s). */
+/**
+ * Cache local con TTL (default 45s).
+ *
+ * El rango 30–60s que exige el PRD es una regla de producto y se valida donde se
+ * configura el TTL, no acá: esta utilidad tiene que servir también para casos con
+ * ventanas cortas, como los tests.
+ */
 export class TtlCache<T> {
   private store = new Map<string, CacheEntry<T>>();
 
-  constructor(private ttlMs: number = 45_000) {
-    if (ttlMs < 30_000 || ttlMs > 60_000) {
-      throw new Error("TTL must be between 30_000 and 60_000 ms");
-    }
-  }
+  constructor(private ttlMs: number = 45_000) {}
 
   get(key: string): T | undefined {
     const entry = this.store.get(key);

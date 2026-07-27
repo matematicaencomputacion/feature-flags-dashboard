@@ -17,6 +17,7 @@ import {
   getSessionUser,
   requireAuth,
 } from "./auth";
+import { getCachedFlag, initFlagCache } from "./flag-cache";
 import {
   createFlag,
   getFlag,
@@ -24,6 +25,8 @@ import {
   updateFlagMeta,
   upsertEnvironmentRules,
 } from "./repo";
+
+initFlagCache(getFlag);
 
 type Variables = { user: string };
 
@@ -195,7 +198,12 @@ app.put("/flags/:key/rules/:environment", async (c) => {
   }
 });
 
-/** Evaluación pública para consumidores (sin auth de panel). */
+/**
+ * Evaluación pública para consumidores (sin auth de panel).
+ *
+ * Único endpoint que lee del caché: el panel (`GET /flags`, `GET /flags/:key`)
+ * va siempre a la base para que el operador vea el estado real apenas guarda.
+ */
 app.post("/evaluate", async (c) => {
   const schema = z.object({
     flagKey: z.string().min(1),
@@ -209,7 +217,7 @@ app.post("/evaluate", async (c) => {
   }
 
   try {
-    const flag = await getFlag(parsed.data.flagKey);
+    const flag = await getCachedFlag(parsed.data.flagKey);
     const result = evaluateFlag(flag, {
       environment: parsed.data.environment,
       tenantId: parsed.data.tenantId,
