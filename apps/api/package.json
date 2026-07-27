@@ -1,0 +1,28 @@
+{
+  "name": "@ff/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "db:migrate": "npm run migrate -w @ff/db"
+  },
+  "dependencies": {
+    "@ff/db": "*",
+    "@ff/domain": "*",
+    "@hono/node-server": "^1.14.4",
+    "@libsql/client": "^0.15.9",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.3",
+    "zod": "^3.25.67"
+  },
+
+
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
