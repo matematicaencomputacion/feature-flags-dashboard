@@ -45,6 +45,8 @@ Monorepo **pnpm** (sin Turborepo). La versión está anclada en el campo
 `packageManager` del `package.json` raíz, así que con [corepack](https://nodejs.org/api/corepack.html)
 habilitado (`corepack enable pnpm`) no hace falta instalar nada más.
 
+Requiere **Node ≥ 22.13**: pnpm 11 usa `node:sqlite`, que no existe en Node 20.
+
 ```bash
 pnpm install
 pnpm test           # dominio + api

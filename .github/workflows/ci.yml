@@ -15,9 +15,11 @@ jobs:
       # que es la misma que se usa localmente.
       - uses: pnpm/action-setup@v4
 
+      # Node 22: pnpm 11 usa node:sqlite y exige >= 22.13. Con Node 20 el propio
+      # setup-node falla, porque `cache: pnpm` ya invoca a pnpm para resolver el store.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install
