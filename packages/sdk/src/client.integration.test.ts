@@ -102,6 +102,39 @@ describe("SDK ↔ API /evaluate (integración)", () => {
     expect(new Set(results).size).toBe(1);
   });
 
+  it("CA-14-05: sticky 50% — dos userId (in/out) estables en ≥5 evaluates", async () => {
+    const { inRollout, rolloutSeed } = await import("@ff/domain");
+    let userIn: string | undefined;
+    let userOut: string | undefined;
+    for (let i = 0; i < 200; i++) {
+      const userId = `u${i}`;
+      const inside = inRollout(rolloutSeed("mvp_check", "staging", userId), 50);
+      if (inside && !userIn) userIn = userId;
+      if (!inside && !userOut) userOut = userId;
+      if (userIn && userOut) break;
+    }
+    expect(userIn && userOut).toBeTruthy();
+
+    const client = createClient({ baseUrl: BASE, fetch: apiFetch });
+    for (let i = 0; i < 5; i++) {
+      client.invalidate();
+      const inn = await client.evaluate({
+        flagKey: "mvp_check",
+        environment: "staging",
+        tenantId: "t",
+        userId: userIn!,
+      });
+      const out = await client.evaluate({
+        flagKey: "mvp_check",
+        environment: "staging",
+        tenantId: "t",
+        userId: userOut!,
+      });
+      expect(inn).toEqual({ enabled: true, reason: "rollout" });
+      expect(out).toEqual({ enabled: false, reason: "rollout" });
+    }
+  });
+
   it("cache hit no vuelve a pegarle a la API", async () => {
     let calls = 0;
     const countingFetch: typeof fetch = async (input, init) => {
