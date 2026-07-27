@@ -15,7 +15,6 @@ import {
   type OverrideMode,
   type SafeDefault,
 } from "@ff/domain";
-import { createClient } from "@libsql/client";
 import { and, desc, eq } from "drizzle-orm";
 import { badRequest, notFound } from "./errors";
 import { mkdirSync } from "node:fs";
@@ -45,10 +44,13 @@ export function closeDb(): void {
   db = undefined;
 }
 
+/**
+ * Crea el schema si no existe, sobre la MISMA conexión que usa el repo: abrir un
+ * cliente aparte dejaba un handle sin cerrar en cada arranque y, con SQLite en
+ * memoria, apuntaría a una base distinta.
+ */
 export async function ensureSchema(): Promise<void> {
-  const client = createClient({ url: dbUrl() });
-  try {
-    await client.executeMultiple(`
+  await getDb().$client.executeMultiple(`
 CREATE TABLE IF NOT EXISTS flags (
   key TEXT PRIMARY KEY,
   lifecycle TEXT NOT NULL DEFAULT 'experimental',
@@ -80,10 +82,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
   summary TEXT NOT NULL
 );
 `);
-  } finally {
-    // Sin esto queda un handle abierto sobre el archivo por cada arranque.
-    client.close();
-  }
 }
 
 async function loadRules(flagKey: string): Promise<EnvironmentRules[]> {

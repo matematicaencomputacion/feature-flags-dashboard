@@ -1,12 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// La ruta de la DB se resuelve en runtime dentro del repo, así que la variable
-// debe estar seteada antes de importar los módulos que la leen.
-const dir = mkdtempSync(join(tmpdir(), "ff-api-test-"));
-process.env.DATABASE_URL = `file:${join(dir, "test.db")}`;
+// SQLite en memoria con cache compartida: la suite no toca el disco, así que no
+// hay temporal que borrar ni handle que Windows pueda dejar bloqueado (el EPERM
+// al limpiar). `cache=shared` hace que todas las conexiones vean la misma base.
+// Se setea antes de importar el repo, que resuelve la URL en runtime.
+process.env.DATABASE_URL = "file::memory:?cache=shared";
 
 const { app } = await import("./app");
 const {
@@ -39,15 +37,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  // Windows no permite borrar un archivo con handles abiertos: primero soltamos
-  // la conexión, y aun así reintentamos, porque el cierre del driver es async por
-  // debajo. Si el temporal igual queda, no es motivo para fallar la corrida.
   closeDb();
-  try {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch (e) {
-    console.warn(`No se pudo borrar el temporal ${dir}:`, e);
-  }
 });
 
 describe("repo — atomicidad", () => {
