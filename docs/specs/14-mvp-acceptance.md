@@ -73,6 +73,26 @@ Mapa 1:1 con PRD §8:
 
 **MVP aceptado solo si CA-14-01 … CA-14-13 = PASS.**
 
+### Matriz de automatización (2026-07-27)
+
+| CA | Automatizado | Dónde | Manual residual |
+|----|--------------|-------|-----------------|
+| CA-14-01 Login | Sí | `e2e/tests/auth.spec.ts` (panel) | — |
+| CA-14-02 CRUD UI | Sí | `e2e/tests/flags-create.spec.ts` (panel) | — |
+| CA-14-03 Tres ambientes | Sí | `apps/api/src/spec14-acceptance.test.ts` | — |
+| CA-14-04 Override empresa | Sí | `spec14-acceptance` + domain `evaluate.test` | — |
+| CA-14-05 Sticky 50% in/out | Sí | `spec14-acceptance` + `sdk/client.integration.test` | — |
+| CA-14-06 Precedencia | Sí | `spec14-acceptance` + domain + SDK integ | — |
+| CA-14-07 Confirm prod | Sí | e2e production-confirm + API `confirmProduction` | — |
+| CA-14-08 Observabilidad UI | Sí | `e2e/tests/observability.spec.ts` (panel) | — |
+| CA-14-09 Lifecycle deprecado | Sí | `spec14-acceptance` (PUT 400 + evaluate OK) | UI disabled post-deprecado (opcional) |
+| CA-14-10 SQLite persistente | Sí (conexión) | `spec14-acceptance` close/reopen archivo temp | Reinicio de proceso OS completo (opcional) |
+| CA-14-11 Cache + fallback | Sí | `packages/sdk` + domain `evaluateWithFallback` | — |
+| CA-14-12 Sin redeploy | Sí (inmediato) | `spec14-acceptance` PUT % → evaluate &lt; 60s | Smoke consumidor externo real |
+| CA-14-13 Fuera de alcance | Sí (guardrail) | `spec14-acceptance` 404 OAuth/roles + shape evaluate | Revisión UI puntual en release |
+
+Filas de panel (`e2e/…`) dependen de la suite Playwright del monorepo; el resto corre con `pnpm test`.
+
 ### Corrida registrada
 
 Evidencia reproducible: [`14-mvp-acceptance-run.md`](./14-mvp-acceptance-run.md)
