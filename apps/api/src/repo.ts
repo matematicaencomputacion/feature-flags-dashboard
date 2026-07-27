@@ -15,7 +15,7 @@ import {
   type OverrideMode,
   type SafeDefault,
 } from "@ff/domain";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, max } from "drizzle-orm";
 import { badRequest, notFound } from "./errors";
 import { invalidateFlag } from "./flag-cache";
 import { mkdirSync } from "node:fs";
@@ -85,17 +85,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `);
 }
 
-async function loadRules(flagKey: string): Promise<EnvironmentRules[]> {
-  const d = getDb();
-  const envRows = await d
-    .select()
-    .from(environmentRules)
-    .where(eq(environmentRules.flagKey, flagKey));
-  const overrideRows = await d
-    .select()
-    .from(tenantOverrides)
-    .where(eq(tenantOverrides.flagKey, flagKey));
+type EnvironmentRuleRow = typeof environmentRules.$inferSelect;
+type TenantOverrideRow = typeof tenantOverrides.$inferSelect;
+type AuditLogRow = typeof auditLog.$inferSelect;
 
+/**
+ * Arma las reglas de una flag a partir de filas ya leídas. Es el único lugar que
+ * define el shape, así que la lectura de a una (getFlag) y la lectura en lote
+ * (listFlags) no pueden divergir.
+ *
+ * El orden de `overrideRows` se respeta tal cual y queda expuesto en la respuesta,
+ * así que ambas lecturas lo piden explícito por (environment, tenant_id). Antes
+ * salía de que SQLite resolviera el filtro por flag_key con el índice unique;
+ * leyendo la tabla entera ese orden implícito pasa a ser el de inserción.
+ */
+function buildRules(
+  envRows: EnvironmentRuleRow[],
+  overrideRows: TenantOverrideRow[],
+): EnvironmentRules[] {
   return ENVIRONMENTS.map((environment) => {
     const row = envRows.find((r) => r.environment === environment);
     return {
@@ -112,6 +119,35 @@ async function loadRules(flagKey: string): Promise<EnvironmentRules[]> {
   });
 }
 
+function groupByFlagKey<T extends { flagKey: string }>(rows: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const bucket = grouped.get(row.flagKey);
+    if (bucket) bucket.push(row);
+    else grouped.set(row.flagKey, [row]);
+  }
+  return grouped;
+}
+
+function toLastChange(row: AuditLogRow) {
+  return { by: row.by, at: row.at, summary: row.summary };
+}
+
+async function loadRules(flagKey: string): Promise<EnvironmentRules[]> {
+  const d = getDb();
+  const envRows = await d
+    .select()
+    .from(environmentRules)
+    .where(eq(environmentRules.flagKey, flagKey));
+  const overrideRows = await d
+    .select()
+    .from(tenantOverrides)
+    .where(eq(tenantOverrides.flagKey, flagKey))
+    .orderBy(tenantOverrides.environment, tenantOverrides.tenantId);
+
+  return buildRules(envRows, overrideRows);
+}
+
 async function lastChange(flagKey: string) {
   const d = getDb();
   const [row] = await d
@@ -121,21 +157,59 @@ async function lastChange(flagKey: string) {
     .orderBy(desc(auditLog.id))
     .limit(1);
   if (!row) return undefined;
-  return { by: row.by, at: row.at, summary: row.summary };
+  return toLastChange(row);
 }
 
+/**
+ * Lee todas las flags con un número constante de queries (4), no 3 por flag.
+ *
+ * Las reglas y los overrides se leen sin filtro porque el resultado incluye a
+ * todas las flags: el FK con ON DELETE CASCADE garantiza que no haya filas
+ * huérfanas, y evitar el `IN (...)` deja fuera el límite de variables de SQLite
+ * cuando el catálogo crece.
+ *
+ * Las filas de auditoría se acotan a la última de cada flag con un max(id)
+ * agrupado, para no traer el historial entero sólo para mostrar el último cambio.
+ */
 export async function listFlags(): Promise<FeatureFlag[]> {
   const d = getDb();
   const rows = await d.select().from(flags);
-  return Promise.all(
-    rows.map(async (row) => ({
-      key: row.key,
-      lifecycle: row.lifecycle as Lifecycle,
-      safeDefault: row.safeDefault as SafeDefault,
-      rules: await loadRules(row.key),
-      lastChange: await lastChange(row.key),
-    })),
+  if (rows.length === 0) return [];
+
+  const [envRows, overrideRows, auditRows] = await Promise.all([
+    d.select().from(environmentRules),
+    d
+      .select()
+      .from(tenantOverrides)
+      .orderBy(
+        tenantOverrides.flagKey,
+        tenantOverrides.environment,
+        tenantOverrides.tenantId,
+      ),
+    d
+      .select()
+      .from(auditLog)
+      .where(
+        inArray(
+          auditLog.id,
+          d.select({ id: max(auditLog.id) }).from(auditLog).groupBy(auditLog.flagKey),
+        ),
+      ),
+  ]);
+
+  const envByFlag = groupByFlagKey(envRows);
+  const overridesByFlag = groupByFlagKey(overrideRows);
+  const lastChangeByFlag = new Map(
+    auditRows.map((row) => [row.flagKey, toLastChange(row)]),
   );
+
+  return rows.map((row) => ({
+    key: row.key,
+    lifecycle: row.lifecycle as Lifecycle,
+    safeDefault: row.safeDefault as SafeDefault,
+    rules: buildRules(envByFlag.get(row.key) ?? [], overridesByFlag.get(row.key) ?? []),
+    lastChange: lastChangeByFlag.get(row.key),
+  }));
 }
 
 export async function getFlag(key: string): Promise<FeatureFlag | null> {
