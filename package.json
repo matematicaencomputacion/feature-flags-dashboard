@@ -10,7 +10,8 @@
     "dev:web": "npm run dev -w @ff/web",
 
     "build": "npm run build -w @ff/domain && npm run build -w @ff/db && npm run build -w @ff/api && npm run build -w @ff/web",
-    "test": "npm run test -w @ff/domain",
+    "typecheck": "tsc --noEmit -p packages/domain/tsconfig.json && tsc --noEmit -p packages/db/tsconfig.json && tsc --noEmit -p apps/api/tsconfig.json",
+    "test": "npm run test -w @ff/domain && npm run test -w @ff/api",
     "db:generate": "npm run generate -w @ff/db",
     "db:migrate": "npm run migrate -w @ff/db"
   },

@@ -17,6 +17,7 @@ import {
 } from "@ff/domain";
 import { createClient } from "@libsql/client";
 import { and, desc, eq } from "drizzle-orm";
+import { badRequest, notFound } from "./errors";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
@@ -27,16 +28,27 @@ function dbUrl(): string {
   return `file:${path}`;
 }
 
-let db: Db;
+let db: Db | undefined;
 
 export function getDb(): Db {
   if (!db) db = createDb(dbUrl());
   return db;
 }
 
+/**
+ * Cierra la conexión y descarta el singleton. Necesario para que el proceso (o un
+ * test) pueda soltar el archivo SQLite: en Windows el handle abierto hace fallar
+ * con EPERM cualquier borrado del directorio que lo contiene.
+ */
+export function closeDb(): void {
+  db?.$client.close();
+  db = undefined;
+}
+
 export async function ensureSchema(): Promise<void> {
   const client = createClient({ url: dbUrl() });
-  await client.executeMultiple(`
+  try {
+    await client.executeMultiple(`
 CREATE TABLE IF NOT EXISTS flags (
   key TEXT PRIMARY KEY,
   lifecycle TEXT NOT NULL DEFAULT 'experimental',
@@ -68,6 +80,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
   summary TEXT NOT NULL
 );
 `);
+  } finally {
+    // Sin esto queda un handle abierto sobre el archivo por cada arranque.
+    client.close();
+  }
 }
 
 async function loadRules(flagKey: string): Promise<EnvironmentRules[]> {
@@ -145,24 +161,34 @@ export async function createFlag(input: {
   const now = new Date().toISOString();
   const safeDefault = input.safeDefault ?? "off";
 
-  await d.insert(flags).values({
-    key: input.key,
-    lifecycle: "experimental",
-    safeDefault,
-    createdAt: now,
-    updatedAt: now,
+  // La flag, sus reglas por ambiente y la entrada de auditoría son una sola
+  // unidad: sin transacción, un fallo intermedio deja una flag sin reglas.
+  await d.transaction(async (tx) => {
+    await tx.insert(flags).values({
+      key: input.key,
+      lifecycle: "experimental",
+      safeDefault,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    for (const environment of ENVIRONMENTS) {
+      await tx.insert(environmentRules).values({
+        flagKey: input.key,
+        environment,
+        defaultOn: false,
+        rolloutPercent: 0,
+      });
+    }
+
+    await tx.insert(auditLog).values({
+      flagKey: input.key,
+      by: input.by,
+      at: now,
+      summary: `Created flag (safe_default=${safeDefault})`,
+    });
   });
 
-  for (const environment of ENVIRONMENTS) {
-    await d.insert(environmentRules).values({
-      flagKey: input.key,
-      environment,
-      defaultOn: false,
-      rolloutPercent: 0,
-    });
-  }
-
-  await writeAudit(input.key, input.by, `Created flag (safe_default=${safeDefault})`);
   const flag = await getFlag(input.key);
   if (!flag) throw new Error("Failed to load created flag");
   return flag;
@@ -176,7 +202,7 @@ export async function updateFlagMeta(input: {
   by: string;
 }): Promise<FeatureFlag> {
   const current = await getFlag(input.key);
-  if (!current) throw Object.assign(new Error("Not found"), { status: 404 });
+  if (!current) throw notFound();
 
   const d = getDb();
   const now = new Date().toISOString();
@@ -188,16 +214,12 @@ export async function updateFlagMeta(input: {
   if (input.lifecycle && input.lifecycle !== current.lifecycle) {
     const { canTransitionLifecycle } = await import("@ff/domain");
     if (!canTransitionLifecycle(current.lifecycle, input.lifecycle)) {
-      throw Object.assign(
-        new Error(`Invalid lifecycle transition ${current.lifecycle} → ${input.lifecycle}`),
-        { status: 400 },
+      throw badRequest(
+        `Invalid lifecycle transition ${current.lifecycle} → ${input.lifecycle}`,
       );
     }
     if (input.lifecycle === "eliminado" && !input.cleanupChecklistConfirmed) {
-      throw Object.assign(
-        new Error("Cleanup checklist confirmation required before eliminado"),
-        { status: 400 },
-      );
+      throw badRequest("Cleanup checklist confirmation required before eliminado");
     }
     updates.lifecycle = input.lifecycle;
     summaries.push(`lifecycle ${current.lifecycle} → ${input.lifecycle}`);
@@ -209,8 +231,15 @@ export async function updateFlagMeta(input: {
   }
 
   if (Object.keys(updates).length > 1) {
-    await d.update(flags).set(updates).where(eq(flags.key, input.key));
-    await writeAudit(input.key, input.by, summaries.join("; ") || "Updated flag");
+    await d.transaction(async (tx) => {
+      await tx.update(flags).set(updates).where(eq(flags.key, input.key));
+      await tx.insert(auditLog).values({
+        flagKey: input.key,
+        by: input.by,
+        at: now,
+        summary: summaries.join("; ") || "Updated flag",
+      });
+    });
   }
 
   const flag = await getFlag(input.key);
@@ -228,93 +257,84 @@ export async function upsertEnvironmentRules(input: {
   by: string;
 }): Promise<FeatureFlag> {
   const current = await getFlag(input.key);
-  if (!current) throw Object.assign(new Error("Not found"), { status: 404 });
+  if (!current) throw notFound();
 
   const { allowsNewRules } = await import("@ff/domain");
   if (!allowsNewRules(current.lifecycle)) {
-    throw Object.assign(
-      new Error("Deprecated/eliminated flags cannot accept new rules"),
-      { status: 400 },
-    );
+    throw badRequest("Deprecated/eliminated flags cannot accept new rules");
   }
 
   if (input.environment === "production" && !input.confirmProduction) {
-    throw Object.assign(
-      new Error("Production changes require confirmProduction=true"),
-      { status: 400 },
-    );
+    throw badRequest("Production changes require confirmProduction=true");
   }
 
   if (input.rolloutPercent < 0 || input.rolloutPercent > 100) {
-    throw Object.assign(new Error("rolloutPercent must be 0–100"), { status: 400 });
+    throw badRequest("rolloutPercent must be 0–100");
   }
 
-  const d = getDb();
   const now = new Date().toISOString();
+  const summary = `Updated ${input.environment}: default=${input.defaultOn}, %=${input.rolloutPercent}, overrides=${input.overrides.length}`;
 
-  const existing = await d
-    .select()
-    .from(environmentRules)
-    .where(
-      and(
-        eq(environmentRules.flagKey, input.key),
-        eq(environmentRules.environment, input.environment),
-      ),
-    )
-    .limit(1);
+  // Reemplazo de reglas + overrides + auditoría en una transacción: el DELETE de
+  // overrides seguido de N INSERT no puede quedar a mitad de camino.
+  await getDb().transaction(async (tx) => {
+    const existing = await tx
+      .select()
+      .from(environmentRules)
+      .where(
+        and(
+          eq(environmentRules.flagKey, input.key),
+          eq(environmentRules.environment, input.environment),
+        ),
+      )
+      .limit(1);
 
-  if (existing[0]) {
-    await d
-      .update(environmentRules)
-      .set({
+    if (existing[0]) {
+      await tx
+        .update(environmentRules)
+        .set({
+          defaultOn: input.defaultOn,
+          rolloutPercent: input.rolloutPercent,
+        })
+        .where(eq(environmentRules.id, existing[0].id));
+    } else {
+      await tx.insert(environmentRules).values({
+        flagKey: input.key,
+        environment: input.environment,
         defaultOn: input.defaultOn,
         rolloutPercent: input.rolloutPercent,
-      })
-      .where(eq(environmentRules.id, existing[0].id));
-  } else {
-    await d.insert(environmentRules).values({
+      });
+    }
+
+    await tx
+      .delete(tenantOverrides)
+      .where(
+        and(
+          eq(tenantOverrides.flagKey, input.key),
+          eq(tenantOverrides.environment, input.environment),
+        ),
+      );
+
+    for (const o of input.overrides) {
+      await tx.insert(tenantOverrides).values({
+        flagKey: input.key,
+        environment: input.environment,
+        tenantId: o.tenantId,
+        mode: o.mode,
+      });
+    }
+
+    await tx.update(flags).set({ updatedAt: now }).where(eq(flags.key, input.key));
+    await tx.insert(auditLog).values({
       flagKey: input.key,
-      environment: input.environment,
-      defaultOn: input.defaultOn,
-      rolloutPercent: input.rolloutPercent,
+      by: input.by,
+      at: now,
+      summary,
     });
-  }
-
-  await d
-    .delete(tenantOverrides)
-    .where(
-      and(
-        eq(tenantOverrides.flagKey, input.key),
-        eq(tenantOverrides.environment, input.environment),
-      ),
-    );
-
-  for (const o of input.overrides) {
-    await d.insert(tenantOverrides).values({
-      flagKey: input.key,
-      environment: input.environment,
-      tenantId: o.tenantId,
-      mode: o.mode,
-    });
-  }
-
-  await d.update(flags).set({ updatedAt: now }).where(eq(flags.key, input.key));
-  await writeAudit(
-    input.key,
-    input.by,
-    `Updated ${input.environment}: default=${input.defaultOn}, %=${input.rolloutPercent}, overrides=${input.overrides.length}`,
-  );
+  });
 
   const flag = await getFlag(input.key);
   if (!flag) throw new Error("Not found after rules update");
   return flag;
 }
 
-async function writeAudit(flagKey: string, by: string, summary: string) {
-  await getDb().insert(auditLog).values({
-    flagKey,
-    by,
-    at: new Date().toISOString(),
-    summary,
-  });
-}

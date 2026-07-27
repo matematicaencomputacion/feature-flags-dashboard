@@ -29,11 +29,18 @@ docs/prds         PRD (fuente de verdad de producto)
 - Precedencia: `force_on`/`force_off` → % sticky por `user_id` → default
 - Persistencia local SQLite; cache TTL 30–60s; fallback `safe_default`
 
+## Estado del repo
+
+El PRD y las specs describen el monorepo sobre **pnpm**; hoy está instalado con
+**npm workspaces** (`package-lock.json`). La migración a pnpm es parte de la
+spec 01 y hasta que se ejecute, los comandos de este README son los válidos.
+
 ## Setup
 
 ```bash
 npm install
-npm run test
+npm run test        # tests de dominio
+npm run typecheck   # tsc --noEmit en domain, db y api
 ```
 
 ## Desarrollo

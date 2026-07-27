@@ -1,0 +1,222 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+// La ruta de la DB se resuelve en runtime dentro del repo, así que la variable
+// debe estar seteada antes de importar los módulos que la leen.
+const dir = mkdtempSync(join(tmpdir(), "ff-api-test-"));
+process.env.DATABASE_URL = `file:${join(dir, "test.db")}`;
+
+const { app } = await import("./app");
+const {
+  closeDb,
+  ensureSchema,
+  createFlag,
+  getFlag,
+  listFlags,
+  updateFlagMeta,
+  upsertEnvironmentRules,
+} = await import("./repo");
+
+const json = { "Content-Type": "application/json" };
+
+async function login(): Promise<string> {
+  const res = await app.request("/auth/login", {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ username: "demo", password: "demo" }),
+  });
+  return ((await res.json()) as { token: string }).token;
+}
+
+function authed(token: string) {
+  return { ...json, Authorization: `Bearer ${token}` };
+}
+
+beforeAll(async () => {
+  await ensureSchema();
+});
+
+afterAll(() => {
+  // Windows no permite borrar un archivo con handles abiertos: primero soltamos
+  // la conexión, y aun así reintentamos, porque el cierre del driver es async por
+  // debajo. Si el temporal igual queda, no es motivo para fallar la corrida.
+  closeDb();
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch (e) {
+    console.warn(`No se pudo borrar el temporal ${dir}:`, e);
+  }
+});
+
+describe("repo — atomicidad", () => {
+  it("crea la flag con reglas de los tres ambientes y auditoría", async () => {
+    const flag = await createFlag({ key: "billing_v2", by: "demo" });
+    expect(flag.rules.map((r) => r.environment)).toEqual([
+      "dev",
+      "staging",
+      "production",
+    ]);
+    expect(flag.lastChange?.by).toBe("demo");
+  });
+
+  it("una key duplicada falla sin dejar estado parcial", async () => {
+    await expect(createFlag({ key: "billing_v2", by: "demo" })).rejects.toThrow();
+    expect((await listFlags()).length).toBe(1);
+  });
+
+  it("el upsert reemplaza los overrides del ambiente de forma atómica", async () => {
+    await upsertEnvironmentRules({
+      key: "billing_v2",
+      environment: "production",
+      defaultOn: true,
+      rolloutPercent: 50,
+      overrides: [{ tenantId: "acme", mode: "force_off" }],
+      confirmProduction: true,
+      by: "demo",
+    });
+    await upsertEnvironmentRules({
+      key: "billing_v2",
+      environment: "production",
+      defaultOn: true,
+      rolloutPercent: 10,
+      overrides: [{ tenantId: "globex", mode: "force_on" }],
+      confirmProduction: true,
+      by: "demo",
+    });
+    const flag = await getFlag("billing_v2");
+    const prod = flag?.rules.find((r) => r.environment === "production");
+    expect(prod?.overrides).toEqual([{ tenantId: "globex", mode: "force_on" }]);
+    expect(prod?.rolloutPercent).toBe(10);
+  });
+
+  it("un cambio de production sin confirmar no persiste (RF-17)", async () => {
+    await expect(
+      upsertEnvironmentRules({
+        key: "billing_v2",
+        environment: "production",
+        defaultOn: false,
+        rolloutPercent: 0,
+        overrides: [],
+        confirmProduction: false,
+        by: "demo",
+      }),
+    ).rejects.toThrow(/confirmProduction/);
+    const flag = await getFlag("billing_v2");
+    expect(flag?.rules.find((r) => r.environment === "production")?.rolloutPercent).toBe(10);
+  });
+
+  it("una transición de lifecycle inválida no muta la flag", async () => {
+    await expect(
+      updateFlagMeta({ key: "billing_v2", lifecycle: "deprecado", by: "demo" }),
+    ).rejects.toThrow(/transition/);
+    expect((await getFlag("billing_v2"))?.lifecycle).toBe("experimental");
+  });
+});
+
+describe("HTTP", () => {
+  it("/health verifica la base, no sólo el proceso", async () => {
+    const res = await app.request("/health");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, db: "up" });
+  });
+
+  it("rechaza credenciales inválidas", async () => {
+    const res = await app.request("/auth/login", {
+      method: "POST",
+      headers: json,
+      body: JSON.stringify({ username: "demo", password: "nope" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("/flags exige token", async () => {
+    expect((await app.request("/flags")).status).toBe(401);
+    const token = await login();
+    expect(
+      (await app.request("/flags", { headers: authed(token) })).status,
+    ).toBe(200);
+  });
+
+  it("key duplicada devuelve 409 y no 500", async () => {
+    const token = await login();
+    const res = await app.request("/flags", {
+      method: "POST",
+      headers: authed(token),
+      body: JSON.stringify({ key: "billing_v2" }),
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json() as { error: string }).error).toBe(
+      "Flag key already exists",
+    );
+  });
+
+  it("key con formato inválido devuelve 400", async () => {
+    const token = await login();
+    const res = await app.request("/flags", {
+      method: "POST",
+      headers: authed(token),
+      body: JSON.stringify({ key: "Billing V2" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("evaluate: force_on gana sobre el rollout", async () => {
+    const res = await app.request("/evaluate", {
+      method: "POST",
+      headers: json,
+      body: JSON.stringify({
+        flagKey: "billing_v2",
+        environment: "production",
+        tenantId: "globex",
+        userId: "u1",
+      }),
+    });
+    expect(await res.json()).toEqual({
+      enabled: true,
+      reason: "force_on",
+      flagKey: "billing_v2",
+    });
+  });
+
+  it("evaluate: flag inexistente cae a safe_default off", async () => {
+    const res = await app.request("/evaluate", {
+      method: "POST",
+      headers: json,
+      body: JSON.stringify({
+        flagKey: "no_existe",
+        environment: "production",
+        tenantId: "t",
+        userId: "u",
+      }),
+    });
+    expect(await res.json()).toEqual({
+      enabled: false,
+      reason: "safe_default",
+      flagKey: "no_existe",
+    });
+  });
+
+  it("evaluate: el rollout es terminal end-to-end (defaultOn=true, 10%)", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 60 }, (_, i) =>
+        app
+          .request("/evaluate", {
+            method: "POST",
+            headers: json,
+            body: JSON.stringify({
+              flagKey: "billing_v2",
+              environment: "production",
+              tenantId: "sin_override",
+              userId: `u-${i}`,
+            }),
+          })
+          .then((r) => r.json() as Promise<{ enabled: boolean }>),
+      ),
+    );
+    const on = results.filter((r) => r.enabled).length;
+    expect(on).toBeGreaterThan(0);
+    expect(on).toBeLessThan(30);
+  });
+});
