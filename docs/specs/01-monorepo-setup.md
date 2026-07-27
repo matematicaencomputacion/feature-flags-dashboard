@@ -88,6 +88,12 @@ Crear el monorepo base con pnpm workspaces (sin Turborepo) y los cuatro paquetes
 ## Notas técnicas
 
 - Puertos fijos MVP: API `8787`, Web `3000`.
+- Convención de tsconfig por paquete: `tsconfig.json` describe **todo** el paquete
+  (tests incluidos) y tiene `noEmit`; es el que usan el editor y `pnpm run typecheck`.
+  `tsconfig.build.json` extiende del anterior, habilita el emit hacia `dist` y excluye
+  `src/**/*.test.ts`; es el que usa `pnpm run build`. Sin `references`: los paquetes
+  exponen su código fuente, así que un `tsc -p` con referencias exigiría `dist/*.d.ts`
+  precompilados y fallaría con TS6305 en un runner limpio.
 - Variable de entorno DB (para specs posteriores): `DATABASE_URL=file:./data/feature-flags.db` (path desde raíz o absoluto `file:`).
 - No usar npm workspaces; si hay `package-lock.json` legado, preferir `pnpm-lock.yaml` como fuente de verdad.
 - Placeholders deben compilar; no dejar paquetes vacíos sin entrypoint.
