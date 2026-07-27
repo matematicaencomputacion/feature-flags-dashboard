@@ -15,11 +15,12 @@
     "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
-    "@ff/domain": "*",
+    "@ff/domain": "workspace:*",
     "@libsql/client": "^0.15.9",
     "drizzle-orm": "^0.44.2"
   },
   "devDependencies": {
+    "@types/node": "^24.0.10",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"

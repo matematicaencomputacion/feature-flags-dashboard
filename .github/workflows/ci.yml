@@ -11,19 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sin `version`: la toma del campo packageManager del package.json raíz,
+      # que es la misma que se usa localmente.
+      - uses: pnpm/action-setup@v4
+
+      # Node 22: pnpm 11 usa node:sqlite y exige >= 22.13. Con Node 20 el propio
+      # setup-node falla, porque `cache: pnpm` ya invoca a pnpm para resolver el store.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
+          cache: pnpm
 
       - name: Install
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
       - name: Build
-        run: npm run build
+        run: pnpm run build

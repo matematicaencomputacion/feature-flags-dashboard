@@ -8,7 +8,10 @@ Crear el monorepo base con pnpm workspaces (sin Turborepo) y los cuatro paquetes
 
 - Producto: herramienta interna de feature flags (toggles booleanos por ambiente, empresa y % de tráfico).
 - Package manager obligatorio: **pnpm** (no npm workspaces, no Yarn, no Turborepo).
-- Node.js ≥ 20.
+- Node.js ≥ 22.13. El piso lo impone pnpm 11, que usa `node:sqlite` y no arranca
+  en Node 20; con esa versión falla incluso el `setup-node` del CI, porque
+  `cache: pnpm` invoca a pnpm antes del install. Node 20 además salió de soporte
+  en abril de 2026. Esta spec pedía ≥ 20 hasta que se ejecutó la migración a pnpm.
 - Estructura objetivo (rutas absolutas desde la raíz del repo):
 
 ```
