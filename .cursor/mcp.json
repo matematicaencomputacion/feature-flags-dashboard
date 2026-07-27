@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mcp-libsql": {
+      "command": "pnpm",
+      "args": [
+        "dlx",
+        "@xexr/mcp-libsql",
+        "--url",
+        "file:///C:/dev/cursor/data/feature-flags.db"
+      ],
+      "disabledTools": [
+        "write-query",
+        "create-table",
+        "alter-table"
+      ]
+    }
+  }
+}

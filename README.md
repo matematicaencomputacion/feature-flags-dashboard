@@ -2,6 +2,8 @@
 
 Herramienta interna de feature flags según [`docs/prds/PRD_FEATURE_FLAGS.md`](docs/prds/PRD_FEATURE_FLAGS.md).
 
+**Estado MVP:** aceptado (2026-07-27). Evidencia Spec 14: [`docs/specs/14-mvp-acceptance-run.md`](docs/specs/14-mvp-acceptance-run.md).
+
 ## Stack
 
 | Pieza | Tecnología |
@@ -80,10 +82,12 @@ Abrir http://localhost:3000 → login `demo` / `demo`.
 
 ## Evaluación (consumidores)
 
+Tras `pnpm db:seed`, la flag de escenario es `mvp_check` (production 100% + override `acme` `force_off`).
+
 ```bash
 curl -X POST http://localhost:8787/evaluate \
   -H "Content-Type: application/json" \
-  -d "{\"flagKey\":\"billing_v2\",\"environment\":\"production\",\"tenantId\":\"acme\",\"userId\":\"user-1\"}"
+  -d "{\"flagKey\":\"mvp_check\",\"environment\":\"production\",\"tenantId\":\"acme\",\"userId\":\"user-1\"}"
 ```
 
 Con el SDK (`@ff/sdk`):
@@ -93,7 +97,7 @@ import { createClient } from "@ff/sdk";
 
 const flags = createClient({ baseUrl: "http://localhost:8787" });
 const { enabled } = await flags.evaluate({
-  flagKey: "billing_v2",
+  flagKey: "mvp_check",
   environment: "production",
   tenantId: "acme",
   userId: "user-1",
@@ -114,3 +118,19 @@ pnpm run db:migrate    # aplica migraciones pendientes (también al arrancar la 
 La API llama al mismo migrator en el arranque (`ensureSchema` → `runMigrations`).
 Si ya tenías un `data/feature-flags.db` creado con el DDL antiguo (sin tabla
 `__drizzle_migrations`), borrá el archivo y volvé a migrar.
+
+## MCP libSQL (Cursor, solo Windows)
+
+Configuración del proyecto: [`.cursor/mcp.json`](.cursor/mcp.json) con
+[`@xexr/mcp-libsql`](https://github.com/Xexr/mcp-libsql) apuntando a
+`file:///C:/dev/cursor/data/feature-flags.db`.
+
+- Este server es **solo para el checkout Windows**. Hay otro checkout en WSL con
+  su propia base; no reutilices esta URL desde WSL.
+- Si la DB no existe: `pnpm db:migrate` (y `pnpm db:seed` para datos de prueba).
+- Tools del paquete: `read-query`, `list-tables`, `describe-table`, `write-query`,
+  `create-table`, `alter-table`. El CLI **no** tiene modo read-only.
+- En este repo quedan habilitadas solo lectura/metadata vía `disabledTools`:
+  `write-query`, `create-table`, `alter-table`. Escrituras: API o `pnpm db:seed`.
+- **Riesgo residual:** si Cursor no aplica `disabledTools`, el server igual
+  registra las tools de escritura/DDL. No uses el MCP para mutar datos.
