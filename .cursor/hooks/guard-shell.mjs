@@ -13,10 +13,17 @@ import { readFileSync } from "node:fs";
 const ALLOWED_RM_TARGETS = new Set(["node_modules", "dist", ".next"]);
 
 function readStdin() {
+  const raw = readFileSync(0, "utf8").replace(/^\uFEFF/, "");
   try {
-    return JSON.parse(readFileSync(0, "utf8") || "{}");
+    return JSON.parse(raw || "{}");
   } catch {
-    return {};
+    process.stdout.write(
+      JSON.stringify({
+        permission: "deny",
+        user_message: "unparseable hook input",
+      }) + "\n",
+    );
+    process.exit(0);
   }
 }
 
