@@ -84,4 +84,15 @@ curl -X POST http://localhost:8787/evaluate \
 
 ## Base de datos
 
-SQLite en `data/feature-flags.db` (se crea al arrancar la API).
+SQLite en `data/feature-flags.db`. El schema vive solo en
+`packages/db/src/schema.ts`; las migraciones versionadas están en
+`packages/db/drizzle/` (generadas con drizzle-kit).
+
+```bash
+pnpm run db:generate   # tras cambiar schema.ts → SQL en packages/db/drizzle/
+pnpm run db:migrate    # aplica migraciones pendientes (también al arrancar la API)
+```
+
+La API llama al mismo migrator en el arranque (`ensureSchema` → `runMigrations`).
+Si ya tenías un `data/feature-flags.db` creado con el DDL antiguo (sin tabla
+`__drizzle_migrations`), borrá el archivo y volvé a migrar.
