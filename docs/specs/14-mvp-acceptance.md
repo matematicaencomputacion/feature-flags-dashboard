@@ -73,9 +73,15 @@ Mapa 1:1 con PRD §8:
 
 **MVP aceptado solo si CA-14-01 … CA-14-13 = PASS.**
 
+### Corrida registrada
+
+Evidencia reproducible: [`14-mvp-acceptance-run.md`](./14-mvp-acceptance-run.md)
+(2026-07-27, Windows checkout). CA-14-01 … CA-14-13 = PASS → MVP aceptado en README.
+
 ## Notas técnicas
 
 - Evidencia mínima por CA: comando + response snippet o captura breve.
-- Si Spec 13 no se implementó, CA-14-11 se valida con unit test `evaluateWithFallback` + comportamiento API evaluate cuando DB error simulado; documentar excepción.
+- Spec 13 (`@ff/sdk`) está en main: CA-14-11 se valida con tests del SDK +
+  `evaluateWithFallback` de domain + catch de `/evaluate` en la API.
 - No relajar premisas: pnpm, SQLite local, usuario demo, boolean flags.
 - Esta spec no agrega features; solo verificación.

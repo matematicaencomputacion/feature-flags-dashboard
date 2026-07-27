@@ -1,6 +1,6 @@
 # PRD — Feature Flags internas
 
-**Estado:** Draft para implementación (premisas bloqueadas)  
+**Estado:** MVP aceptado (2026-07-27; evidencia Spec 14)  
 **Versión:** 1.0  
 **Producto:** Herramienta interna de activación/desactivación de features
 
