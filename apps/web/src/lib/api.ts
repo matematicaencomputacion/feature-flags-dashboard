@@ -7,6 +7,29 @@ function token(): string | null {
   return localStorage.getItem("ff_token");
 }
 
+/**
+ * El error puede venir como string (errores de negocio) o como el `flatten()` de
+ * Zod (errores de validación). Sin este normalizador, el segundo caso termina en
+ * un `Error` cuyo mensaje es "[object Object]".
+ */
+function errorMessage(data: unknown, fallback: string): string {
+  const error = (data as { error?: unknown } | null)?.error;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const flattened = error as {
+      formErrors?: string[];
+      fieldErrors?: Record<string, string[] | undefined>;
+    };
+    const form = flattened.formErrors?.[0];
+    if (form) return form;
+    const field = Object.entries(flattened.fieldErrors ?? {})
+      .map(([key, messages]) => (messages?.length ? `${key}: ${messages[0]}` : null))
+      .filter(Boolean);
+    if (field.length) return field.join("; ");
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
@@ -16,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.formErrors?.[0] ?? data.error ?? res.statusText);
+    throw new Error(errorMessage(data, res.statusText));
   }
   return data as T;
 }

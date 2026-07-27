@@ -10,3 +10,6 @@ data
 coverage
 *.log
 .DS_Store
+*.tsbuildinfo
+.idea
+desktop.ini

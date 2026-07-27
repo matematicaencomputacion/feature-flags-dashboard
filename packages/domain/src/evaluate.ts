@@ -1,4 +1,4 @@
-import { inRollout } from "./hash";
+import { inRollout, rolloutSeed } from "./hash";
 import type {
   EnvironmentRules,
   EvaluateContext,
@@ -22,8 +22,12 @@ function fromSafeDefault(safeDefault: SafeDefault): EvaluateResult {
 }
 
 /**
- * Precedencia: override empresa → % → default ambiente.
- * Flags eliminadas no se evalúan (safe_default / not applicable → false via eliminado).
+ * Precedencia (PRD §6 / RF-12): override empresa → % → default ambiente.
+ *
+ * El % es terminal cuando está configurado (`rolloutPercent > 0`): el default de
+ * ambiente es "el valor base si no aplica override ni %" (PRD §6). Si el default
+ * pisara al usuario excluido del bucket, un `defaultOn=true` con rollout 10%
+ * daría `true` para todos y el porcentaje sería decorativo.
  */
 export function evaluateFlag(
   flag: FeatureFlag | null | undefined,
@@ -51,11 +55,11 @@ export function evaluateFlag(
   }
 
   if (rules.rolloutPercent > 0) {
-    const included = inRollout(ctx.userId, rules.rolloutPercent);
-    if (included) {
-      return { enabled: true, reason: "rollout" };
-    }
-    // Si hay % configurado y el usuario no entra, cae al default del ambiente
+    const seed = rolloutSeed(flag.key, rules.environment, ctx.userId);
+    return {
+      enabled: inRollout(seed, rules.rolloutPercent),
+      reason: "rollout",
+    };
   }
 
   return {

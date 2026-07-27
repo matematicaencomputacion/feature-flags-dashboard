@@ -9,6 +9,7 @@ import {
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
+import { conflict, isUniqueViolation, toHttpResponse } from "./errors";
 import {
   DEMO_USER,
   createSession,
@@ -16,6 +17,7 @@ import {
   getSessionUser,
   requireAuth,
 } from "./auth";
+import { getCachedFlag, initFlagCache } from "./flag-cache";
 import {
   createFlag,
   getFlag,
@@ -23,6 +25,8 @@ import {
   updateFlagMeta,
   upsertEnvironmentRules,
 } from "./repo";
+
+initFlagCache(getFlag);
 
 type Variables = { user: string };
 
@@ -37,7 +41,15 @@ app.use(
   }),
 );
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", async (c) => {
+  try {
+    await listFlags();
+    return c.json({ ok: true, db: "up" });
+  } catch (e) {
+    console.error("[health] db check failed", e);
+    return c.json({ ok: false, db: "down" }, 503);
+  }
+});
 
 app.post("/auth/login", async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -94,11 +106,9 @@ app.post("/flags", async (c) => {
     });
     return c.json({ flag }, 201);
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Create failed";
-    if (message.includes("UNIQUE") || message.includes("unique")) {
-      return c.json({ error: "Flag key already exists" }, 409);
-    }
-    return c.json({ error: message }, 500);
+    const err = isUniqueViolation(e) ? conflict("Flag key already exists") : e;
+    const { status, message } = toHttpResponse(err);
+    return c.json({ error: message }, status);
   }
 });
 
@@ -144,8 +154,8 @@ app.patch("/flags/:key", async (c) => {
     });
     return c.json({ flag });
   } catch (e) {
-    const err = e as Error & { status?: number };
-    return c.json({ error: err.message }, err.status ?? 500);
+    const { status, message } = toHttpResponse(e);
+    return c.json({ error: message }, status);
   }
 });
 
@@ -183,12 +193,17 @@ app.put("/flags/:key/rules/:environment", async (c) => {
     });
     return c.json({ flag });
   } catch (e) {
-    const err = e as Error & { status?: number };
-    return c.json({ error: err.message }, err.status ?? 500);
+    const { status, message } = toHttpResponse(e);
+    return c.json({ error: message }, status);
   }
 });
 
-/** Evaluación pública para consumidores (sin auth de panel). */
+/**
+ * Evaluación pública para consumidores (sin auth de panel).
+ *
+ * Único endpoint que lee del caché: el panel (`GET /flags`, `GET /flags/:key`)
+ * va siempre a la base para que el operador vea el estado real apenas guarda.
+ */
 app.post("/evaluate", async (c) => {
   const schema = z.object({
     flagKey: z.string().min(1),
@@ -202,7 +217,7 @@ app.post("/evaluate", async (c) => {
   }
 
   try {
-    const flag = await getFlag(parsed.data.flagKey);
+    const flag = await getCachedFlag(parsed.data.flagKey);
     const result = evaluateFlag(flag, {
       environment: parsed.data.environment,
       tenantId: parsed.data.tenantId,
@@ -217,8 +232,14 @@ app.post("/evaluate", async (c) => {
       });
     }
     return c.json({ ...result, flagKey: parsed.data.flagKey });
-  } catch {
-    // RF-25: si falla la lectura, safe_default (off si no hay flag cacheable)
+  } catch (e) {
+    // RF-25: si falla la lectura, safe_default (off si no hay flag cacheable).
+    // Se loggea: un fallo de base no puede ser indistinguible de una flag apagada.
+    console.error("[evaluate] fallback a safe_default", {
+      flagKey: parsed.data.flagKey,
+      environment: parsed.data.environment,
+      error: e instanceof Error ? e.message : String(e),
+    });
     return c.json({
       enabled: false,
       reason: "safe_default",

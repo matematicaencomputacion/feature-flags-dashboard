@@ -29,11 +29,28 @@ docs/prds         PRD (fuente de verdad de producto)
 - Precedencia: `force_on`/`force_off` → % sticky por `user_id` → default
 - Persistencia local SQLite; cache TTL 30–60s; fallback `safe_default`
 
+## Estado del repo
+
+El PRD y las specs describen el monorepo sobre **pnpm**; hoy está instalado con
+**npm workspaces** (`package-lock.json`). La migración a pnpm es parte de la
+spec 01 y hasta que se ejecute, los comandos de este README son los válidos.
+
+## Limitaciones conocidas
+
+- **SQLite como punto único de fallo**, ya reconocido en el PRD.
+- **El caché de evaluación es in-process.** `POST /evaluate` sirve desde un caché
+  con TTL (`FLAG_CACHE_TTL_MS`, 30–60s, default 45s) que cada escritura invalida
+  al instante. Eso alcanza con una sola instancia de API; con varias, la que
+  recibe el cambio invalida el suyo y las demás sirven la definición vieja hasta
+  que expire el TTL. Resolverlo pide un caché compartido o un canal de
+  invalidación entre instancias.
+
 ## Setup
 
 ```bash
 npm install
-npm run test
+npm run test        # tests de dominio
+npm run typecheck   # tsc --noEmit en domain, db y api
 ```
 
 ## Desarrollo

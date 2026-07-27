@@ -8,5 +8,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../../packages/domain" }, { "path": "../../packages/db" }]
+  "exclude": ["src/**/*.test.ts"]
 }

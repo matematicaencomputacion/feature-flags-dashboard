@@ -1,0 +1,9 @@
+# Normaliza a LF en el repo; el checkout en Windows sigue siendo CRLF si el
+# usuario lo configuró así. Evita el ruido de "todo el árbol modificado".
+* text=auto eol=lf
+
+# Binarios y lockfiles que no deben normalizarse.
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
