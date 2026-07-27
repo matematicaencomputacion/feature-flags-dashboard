@@ -14,8 +14,8 @@
     "@ff/db": "workspace:*",
     "@ff/domain": "workspace:*",
     "@hono/node-server": "^1.14.4",
-    "@libsql/client": "^0.15.9",
-    "drizzle-orm": "^0.44.2",
+    "@libsql/client": "^0.17.4",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.8.3",
     "zod": "^4.4.3"
   },
