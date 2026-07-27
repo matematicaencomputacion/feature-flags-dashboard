@@ -113,7 +113,7 @@ app.post("/flags", async (c) => {
   if (!body.ok) return c.json(INVALID_JSON, 400);
   const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   try {
     const flag = await createFlag({
@@ -146,7 +146,7 @@ app.patch("/flags/:key", async (c) => {
   if (!body.ok) return c.json(INVALID_JSON, 400);
   const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
 
   // Cambios de lifecycle/safeDefault afectan evaluación en todos los envs incl. prod
@@ -199,7 +199,7 @@ app.put("/flags/:key/rules/:environment", async (c) => {
   if (!body.ok) return c.json(INVALID_JSON, 400);
   const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
 
   try {
@@ -236,7 +236,7 @@ app.post("/evaluate", async (c) => {
   if (!body.ok) return c.json(INVALID_JSON, 400);
   const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
 
   try {

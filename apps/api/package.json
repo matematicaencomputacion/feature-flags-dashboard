@@ -17,14 +17,12 @@
     "@libsql/client": "^0.15.9",
     "drizzle-orm": "^0.44.2",
     "hono": "^4.8.3",
-    "zod": "^3.25.67"
+    "zod": "^4.4.3"
   },
-
-
   "devDependencies": {
     "@types/node": "^24.0.10",
     "tsx": "^4.20.3",
-    "vitest": "^3.2.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }
