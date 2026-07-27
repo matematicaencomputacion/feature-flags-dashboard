@@ -142,7 +142,7 @@ describe("HTTP", () => {
     );
   });
 
-  it("key con formato inválido devuelve 400", async () => {
+  it("key con formato inválido devuelve 400 con forma flatten de zod", async () => {
     const token = await login();
     const res = await app.request("/flags", {
       method: "POST",
@@ -150,6 +150,21 @@ describe("HTTP", () => {
       body: JSON.stringify({ key: "Billing V2" }),
     });
     expect(res.status).toBe(400);
+    // Contrato que consume apps/web/src/lib/api.ts (errorMessage):
+    // { error: { formErrors: string[], fieldErrors: Record<string, string[]> } }
+    const body = (await res.json()) as {
+      error: {
+        formErrors: string[];
+        fieldErrors: Record<string, string[] | undefined>;
+      };
+    };
+    expect(body.error).toEqual(
+      expect.objectContaining({
+        formErrors: expect.any(Array),
+        fieldErrors: expect.any(Object),
+      }),
+    );
+    expect(body.error.fieldErrors.key?.length).toBeGreaterThan(0);
   });
 
   it("body malformado en POST /flags devuelve 400 y no 500", async () => {
