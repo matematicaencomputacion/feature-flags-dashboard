@@ -1,12 +1,11 @@
 import {
   ENVIRONMENTS,
+  LIFECYCLES,
+  OVERRIDE_MODES,
+  SAFE_DEFAULTS,
   evaluateFlag,
-  type Environment,
-  type Lifecycle,
-  type OverrideMode,
-  type SafeDefault,
 } from "@ff/domain";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { conflict, isUniqueViolation, toHttpResponse } from "./errors";
@@ -29,6 +28,22 @@ import {
 initFlagCache(getFlag);
 
 type Variables = { user: string };
+
+/**
+ * Un body que no es JSON válido es error del cliente: sin esto la excepción de
+ * c.req.json() escapa del handler y Hono responde 500 en vez de 400.
+ */
+async function readJsonBody(
+  c: Context,
+): Promise<{ ok: true; data: unknown } | { ok: false }> {
+  try {
+    return { ok: true, data: await c.req.json() };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const INVALID_JSON = { error: "Invalid JSON body" } as const;
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -92,16 +107,18 @@ app.post("/flags", async (c) => {
       .min(1)
       .max(64)
       .regex(/^[a-z][a-z0-9_]*$/, "key must be snake_case starting with a letter"),
-    safeDefault: z.enum(["off", "on"]).optional(),
+    safeDefault: z.enum(SAFE_DEFAULTS).optional(),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
   try {
     const flag = await createFlag({
       key: parsed.data.key,
-      safeDefault: parsed.data.safeDefault as SafeDefault | undefined,
+      safeDefault: parsed.data.safeDefault,
       by: c.get("user"),
     });
     return c.json({ flag }, 201);
@@ -120,12 +137,14 @@ app.get("/flags/:key", async (c) => {
 
 app.patch("/flags/:key", async (c) => {
   const schema = z.object({
-    lifecycle: z.enum(["experimental", "GA", "deprecado", "eliminado"]).optional(),
-    safeDefault: z.enum(["off", "on"]).optional(),
+    lifecycle: z.enum(LIFECYCLES).optional(),
+    safeDefault: z.enum(SAFE_DEFAULTS).optional(),
     cleanupChecklistConfirmed: z.boolean().optional(),
     confirmProduction: z.boolean().optional(),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
@@ -147,8 +166,8 @@ app.patch("/flags/:key", async (c) => {
   try {
     const flag = await updateFlagMeta({
       key: c.req.param("key"),
-      lifecycle: parsed.data.lifecycle as Lifecycle | undefined,
-      safeDefault: parsed.data.safeDefault as SafeDefault | undefined,
+      lifecycle: parsed.data.lifecycle,
+      safeDefault: parsed.data.safeDefault,
       cleanupChecklistConfirmed: parsed.data.cleanupChecklistConfirmed,
       by: c.get("user"),
     });
@@ -160,8 +179,8 @@ app.patch("/flags/:key", async (c) => {
 });
 
 app.put("/flags/:key/rules/:environment", async (c) => {
-  const environment = c.req.param("environment");
-  if (!ENVIRONMENTS.includes(environment as Environment)) {
+  const environment = z.enum(ENVIRONMENTS).safeParse(c.req.param("environment"));
+  if (!environment.success) {
     return c.json({ error: "Invalid environment" }, 400);
   }
 
@@ -171,12 +190,14 @@ app.put("/flags/:key/rules/:environment", async (c) => {
     overrides: z.array(
       z.object({
         tenantId: z.string().min(1),
-        mode: z.enum(["force_on", "force_off"]),
+        mode: z.enum(OVERRIDE_MODES),
       }),
     ),
-    confirmProduction: z.boolean().optional().default(false),
+    confirmProduction: z.boolean().default(false),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
@@ -184,11 +205,11 @@ app.put("/flags/:key/rules/:environment", async (c) => {
   try {
     const flag = await upsertEnvironmentRules({
       key: c.req.param("key"),
-      environment: environment as Environment,
+      environment: environment.data,
       defaultOn: parsed.data.defaultOn,
       rolloutPercent: parsed.data.rolloutPercent,
-      overrides: parsed.data.overrides as { tenantId: string; mode: OverrideMode }[],
-      confirmProduction: parsed.data.confirmProduction ?? false,
+      overrides: parsed.data.overrides,
+      confirmProduction: parsed.data.confirmProduction,
       by: c.get("user"),
     });
     return c.json({ flag });
@@ -207,11 +228,13 @@ app.put("/flags/:key/rules/:environment", async (c) => {
 app.post("/evaluate", async (c) => {
   const schema = z.object({
     flagKey: z.string().min(1),
-    environment: z.enum(["dev", "staging", "production"]),
+    environment: z.enum(ENVIRONMENTS),
     tenantId: z.string().min(1),
     userId: z.string().min(1),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }

@@ -10,3 +10,9 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: false
+
+# next pinea postcss 8.4.31 exacto (también en la 16), afectada por
+# GHSA-r28c-9q8g-f849: path traversal al cargar source maps previos. Corregido en
+# 8.5.18, que es la línea que ya usan @tailwindcss/postcss y vite.
+overrides:
+  postcss: ">=8.5.18"
