@@ -25,11 +25,12 @@ export default function FlagsPage() {
     e.preventDefault();
     setCreating(true);
     setError(null);
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     try {
       const key = String(form.get("key")).trim();
       await createFlag(key);
-      e.currentTarget.reset();
+      formEl.reset();
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
