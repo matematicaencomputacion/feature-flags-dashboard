@@ -29,9 +29,9 @@ Definir el schema Drizzle + SQLite/libSQL, migraciones/bootstrap y un seed míni
 | `created_at` | TEXT NOT NULL | ISO-8601 |
 | `updated_at` | TEXT NOT NULL | ISO-8601 |
 
-#### Tabla `targeting_rules`
+#### Tabla `environment_rules`
 
-Una fila por par (`flag_key`, `environment`).
+Una fila por par (`flag_key`, `environment`). (Nombre histórico en esta spec: `targeting_rules`; en main la tabla es `environment_rules`.)
 
 | Columna | Tipo | Notas |
 |---------|------|--------|
@@ -65,10 +65,17 @@ Una fila por par (`flag_key`, `environment`).
 
 ### Seed mínimo
 
-- Flag `billing_v2`: lifecycle `experimental`, `safe_default=off`
-- Tres `targeting_rules` (dev/staging/production) con `default_on=0`, `rollout_percent=0`
-- En `staging`: override `tenant_id=acme`, `mode=force_on`
-- Un `audit_log`: `by=demo`, summary `Seed billing_v2`
+Alineado al escenario de Spec 14 (aceptación MVP). Idempotente: re-correr no duplica filas UNIQUE ni auditoría del seed.
+
+- Flag `mvp_check`: lifecycle `experimental`, `safe_default=off`
+- Tres `environment_rules`:
+  - `dev`: `default_on=0`, `rollout_percent=0`
+  - `staging`: `default_on=0`, `rollout_percent=50`, sin overrides
+  - `production`: `default_on=0`, `rollout_percent=100`
+- En `production`: override `tenant_id=acme`, `mode=force_off`
+- Un `audit_log`: `by=seed`, summary del seed de `mvp_check`
+
+(El seed histórico de esta spec mencionaba `billing_v2`; prevalece el escenario de Spec 14 / main.)
 
 ## Alcance
 
@@ -99,11 +106,11 @@ Una fila por par (`flag_key`, `environment`).
 
 ## Criterios de aceptación verificables
 
-- **CA-03-01** Tras `pnpm db:migrate`, existen las tablas `flags`, `targeting_rules`, `tenant_overrides`, `audit_log` en el archivo SQLite.
-- **CA-03-02** Tras `pnpm db:seed`, existe flag `billing_v2` con 3 filas en `targeting_rules` (una por ambiente).
-- **CA-03-03** Seed idempotente: correr seed dos veces no duplica `billing_v2` ni rompe UNIQUE.
-- **CA-03-04** Hay al menos 1 fila en `audit_log` para `billing_v2`.
-- **CA-03-05** Existe override seed `acme`/`force_on` en `staging`.
+- **CA-03-01** Tras `pnpm db:migrate`, existen las tablas `flags`, `environment_rules`, `tenant_overrides`, `audit_log` en el archivo SQLite.
+- **CA-03-02** Tras `pnpm db:seed`, existe flag `mvp_check` con 3 filas en `environment_rules` (una por ambiente).
+- **CA-03-03** Seed idempotente: correr seed dos veces no duplica `mvp_check` ni rompe UNIQUE.
+- **CA-03-04** Hay al menos 1 fila en `audit_log` para `mvp_check` con `by=seed`.
+- **CA-03-05** Hay override seed `acme`/`force_off` en `production`; staging sin overrides; staging `rollout_percent=50`; production `rollout_percent=100`.
 - **CA-03-06** Reiniciar el proceso y reabrir la misma `DATABASE_URL` conserva los datos (RF-22 / RNF-04).
 
 ## Notas técnicas
