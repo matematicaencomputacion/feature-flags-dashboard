@@ -10,6 +10,7 @@ Herramienta interna de feature flags según [`docs/prds/PRD_FEATURE_FLAGS.md`](d
 | API | Hono (`apps/api`) |
 | Persistencia | Drizzle ORM + SQLite/libSQL (`packages/db`) |
 | Dominio | TypeScript + Vitest (`packages/domain`) |
+| SDK | Cliente evaluate + cache TTL (`packages/sdk`) |
 
 ## Estructura
 
@@ -18,6 +19,7 @@ apps/web          Panel (login demo, flags, reglas)
 apps/api          API REST + evaluación
 packages/db       Schema Drizzle / SQLite
 packages/domain   Evaluador, hash sticky, lifecycle
+packages/sdk      Cliente HTTP de evaluación + cache local
 docs/prds         PRD (fuente de verdad de producto)
 ```
 
@@ -53,9 +55,11 @@ Requiere **Node ≥ 22.13**: pnpm 11 usa `node:sqlite`, que no existe en Node 20
 
 ```bash
 pnpm install
-pnpm test           # dominio + api
-pnpm run typecheck  # tsc --noEmit en domain, db, api (tests incluidos) y web
+pnpm test           # dominio + sdk + api
+pnpm run typecheck  # tsc --noEmit en domain, db, sdk, api (tests incluidos) y web
 pnpm run build
+pnpm db:migrate
+pnpm db:seed        # flag mvp_check (escenario Spec 14)
 ```
 
 ## Desarrollo
@@ -80,6 +84,20 @@ Abrir http://localhost:3000 → login `demo` / `demo`.
 curl -X POST http://localhost:8787/evaluate \
   -H "Content-Type: application/json" \
   -d "{\"flagKey\":\"billing_v2\",\"environment\":\"production\",\"tenantId\":\"acme\",\"userId\":\"user-1\"}"
+```
+
+Con el SDK (`@ff/sdk`):
+
+```ts
+import { createClient } from "@ff/sdk";
+
+const flags = createClient({ baseUrl: "http://localhost:8787" });
+const { enabled } = await flags.evaluate({
+  flagKey: "billing_v2",
+  environment: "production",
+  tenantId: "acme",
+  userId: "user-1",
+});
 ```
 
 ## Base de datos

@@ -20,7 +20,8 @@ Monorepo pnpm (sin Turborepo) · TypeScript · Next.js + Tailwind · Hono · Dri
 apps/web          Panel del operador (Next.js App Router)
 apps/api          API REST y endpoint de evaluación (Hono, :8787)
 packages/domain   Tipos y lógica pura: evaluador, hash sticky, lifecycle
-packages/db       Schema Drizzle, cliente libSQL, migraciones
+packages/db       Schema Drizzle, cliente libSQL, migraciones y seed
+packages/sdk      Cliente HTTP de evaluación + cache local TTL
 docs/prds         PRD (qué construimos y por qué)
 docs/specs        Specs de implementación, numeradas
 data/             SQLite local (gitignored)
