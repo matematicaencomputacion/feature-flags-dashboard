@@ -119,14 +119,16 @@ La API llama al mismo migrator en el arranque (`ensureSchema` → `runMigrations
 Si ya tenías un `data/feature-flags.db` creado con el DDL antiguo (sin tabla
 `__drizzle_migrations`), borrá el archivo y volvé a migrar.
 
-## MCP libSQL (Cursor, solo Windows)
+## MCP libSQL (Cursor, WSL2 / Linux)
 
-Configuración del proyecto: [`.cursor/mcp.json`](.cursor/mcp.json) con
+El checkout activo del proyecto corre en **WSL2 / Linux**
+(`~/dev/feature-flags-dashboard`). Configuración:
+[`.cursor/mcp.json`](.cursor/mcp.json) con
 [`@xexr/mcp-libsql`](https://github.com/Xexr/mcp-libsql) apuntando a
-`file:///C:/dev/cursor/data/feature-flags.db`.
+`file:///root/dev/feature-flags-dashboard/data/feature-flags.db`.
 
-- Este server es **solo para el checkout Windows**. Hay otro checkout en WSL con
-  su propia base; no reutilices esta URL desde WSL.
+- Usá esta URL solo desde el entorno Linux/WSL2 del repo. Un checkout en
+  Windows nativo necesita su propia ruta `file:///...` absoluta.
 - Si la DB no existe: `pnpm db:migrate` (y `pnpm db:seed` para datos de prueba).
 - Tools del paquete: `read-query`, `list-tables`, `describe-table`, `write-query`,
   `create-table`, `alter-table`. El CLI **no** tiene modo read-only.
