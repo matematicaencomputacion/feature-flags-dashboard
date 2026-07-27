@@ -9,8 +9,11 @@ export const LIFECYCLES = [
 ] as const;
 export type Lifecycle = (typeof LIFECYCLES)[number];
 
-export type SafeDefault = "off" | "on";
-export type OverrideMode = "force_on" | "force_off";
+export const SAFE_DEFAULTS = ["off", "on"] as const;
+export type SafeDefault = (typeof SAFE_DEFAULTS)[number];
+
+export const OVERRIDE_MODES = ["force_on", "force_off"] as const;
+export type OverrideMode = (typeof OVERRIDE_MODES)[number];
 
 export type TenantOverride = {
   tenantId: string;
