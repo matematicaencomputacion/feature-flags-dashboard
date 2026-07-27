@@ -35,7 +35,9 @@ El token vive en `localStorage` bajo `ff_token` y lo inyecta `src/lib/api.ts` co
 
 ## Guardas y confirmación
 
-- Página autenticada sin token → `router.replace("/")`.
+- Rutas bajo `/flags` se protegen en el layout con `useRequireAuth`: valida el
+  token con `GET /auth/me` (no solo su presencia en `localStorage`). Ausente o
+  vencido → limpia `ff_token` y `router.replace("/")`.
 - Guardar reglas en `production` **debe** abrir modal de confirmación; solo al confirmar se llama la API con `confirmProduction: true`. Cancelar no dispara request.
 - Con lifecycle `deprecado` o `eliminado`, los controles de reglas van `disabled`.
 
