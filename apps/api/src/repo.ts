@@ -3,6 +3,7 @@ import {
   createDb,
   environmentRules,
   flags,
+  runMigrations,
   tenantOverrides,
   type Db,
 } from "@ff/db";
@@ -46,43 +47,12 @@ export function closeDb(): void {
 }
 
 /**
- * Crea el schema si no existe, sobre la MISMA conexión que usa el repo: abrir un
- * cliente aparte dejaba un handle sin cerrar en cada arranque y, con SQLite en
+ * Aplica migraciones versionadas (drizzle-kit) sobre la MISMA conexión que usa
+ * el repo: un cliente aparte dejaría un handle sin cerrar y, con SQLite en
  * memoria, apuntaría a una base distinta.
  */
 export async function ensureSchema(): Promise<void> {
-  await getDb().$client.executeMultiple(`
-CREATE TABLE IF NOT EXISTS flags (
-  key TEXT PRIMARY KEY,
-  lifecycle TEXT NOT NULL DEFAULT 'experimental',
-  safe_default TEXT NOT NULL DEFAULT 'off',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS environment_rules (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  flag_key TEXT NOT NULL REFERENCES flags(key) ON DELETE CASCADE,
-  environment TEXT NOT NULL,
-  default_on INTEGER NOT NULL DEFAULT 0,
-  rollout_percent INTEGER NOT NULL DEFAULT 0
-);
-CREATE UNIQUE INDEX IF NOT EXISTS env_rules_flag_env ON environment_rules(flag_key, environment);
-CREATE TABLE IF NOT EXISTS tenant_overrides (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  flag_key TEXT NOT NULL REFERENCES flags(key) ON DELETE CASCADE,
-  environment TEXT NOT NULL,
-  tenant_id TEXT NOT NULL,
-  mode TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS tenant_override_unique ON tenant_overrides(flag_key, environment, tenant_id);
-CREATE TABLE IF NOT EXISTS audit_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  flag_key TEXT NOT NULL,
-  by TEXT NOT NULL,
-  at TEXT NOT NULL,
-  summary TEXT NOT NULL
-);
-`);
+  await runMigrations(getDb());
 }
 
 type EnvironmentRuleRow = typeof environmentRules.$inferSelect;
