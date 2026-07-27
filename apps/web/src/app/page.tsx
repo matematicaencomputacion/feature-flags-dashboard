@@ -43,6 +43,7 @@ export default function LoginPage() {
 
       <form
         onSubmit={onSubmit}
+        method="post"
         className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6"
       >
         <label className="block space-y-1 text-sm">
