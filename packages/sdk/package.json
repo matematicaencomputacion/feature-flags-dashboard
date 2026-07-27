@@ -1,5 +1,5 @@
 {
-  "name": "@ff/db",
+  "name": "@ff/sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,22 +8,19 @@
   "exports": {
     ".": "./src/index.ts"
   },
-
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate.ts",
-    "seed": "tsx src/seed.ts"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@ff/domain": "workspace:*",
-    "@libsql/client": "^0.17.4",
-    "drizzle-orm": "^0.45.2"
+    "@ff/domain": "workspace:*"
   },
   "devDependencies": {
+    "@ff/api": "workspace:*",
+    "@ff/db": "workspace:*",
     "@types/node": "^24.0.10",
-    "drizzle-kit": "^0.31.10",
-    "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }
