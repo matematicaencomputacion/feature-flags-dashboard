@@ -22,6 +22,7 @@ apps/api          API REST y endpoint de evaluación (Hono, :8787)
 packages/domain   Tipos y lógica pura: evaluador, hash sticky, lifecycle
 packages/db       Schema Drizzle, cliente libSQL, migraciones y seed
 packages/sdk      Cliente HTTP de evaluación + cache local TTL
+e2e               Suite Playwright del panel (Chromium; `pnpm test:e2e`)
 docs/prds         PRD (qué construimos y por qué)
 docs/specs        Specs de implementación, numeradas
 data/             SQLite local (gitignored)

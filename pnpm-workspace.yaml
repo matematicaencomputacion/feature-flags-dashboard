@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "e2e"
 
 # pnpm no corre scripts de instalación salvo que se los autorice acá, uno por uno.
 # esbuild necesita el suyo para dejar el binario de la plataforma; sin eso no
