@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm no corre scripts de instalación salvo que se los autorice acá, uno por uno.
+# esbuild necesita el suyo para dejar el binario de la plataforma; sin eso no
+# arrancan vitest, tsx ni drizzle-kit. sharp queda denegado a propósito: Next
+# resuelve la optimización de imágenes con los paquetes precompilados por
+# plataforma, así que su script no hace falta.
+allowBuilds:
+  esbuild: true
+  sharp: false

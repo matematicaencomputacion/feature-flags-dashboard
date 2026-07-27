@@ -29,12 +29,6 @@ docs/prds         PRD (fuente de verdad de producto)
 - Precedencia: `force_on`/`force_off` → % sticky por `user_id` → default
 - Persistencia local SQLite; cache TTL 30–60s; fallback `safe_default`
 
-## Estado del repo
-
-El PRD y las specs describen el monorepo sobre **pnpm**; hoy está instalado con
-**npm workspaces** (`package-lock.json`). La migración a pnpm es parte de la
-spec 01 y hasta que se ejecute, los comandos de este README son los válidos.
-
 ## Limitaciones conocidas
 
 - **SQLite como punto único de fallo**, ya reconocido en el PRD.
@@ -47,10 +41,15 @@ spec 01 y hasta que se ejecute, los comandos de este README son los válidos.
 
 ## Setup
 
+Monorepo **pnpm** (sin Turborepo). La versión está anclada en el campo
+`packageManager` del `package.json` raíz, así que con [corepack](https://nodejs.org/api/corepack.html)
+habilitado (`corepack enable pnpm`) no hace falta instalar nada más.
+
 ```bash
-npm install
-npm run test        # tests de dominio
-npm run typecheck   # tsc --noEmit en domain, db y api
+pnpm install
+pnpm test           # dominio + api
+pnpm run typecheck  # tsc --noEmit en domain, db y api
+pnpm run build
 ```
 
 ## Desarrollo
@@ -58,13 +57,13 @@ npm run typecheck   # tsc --noEmit en domain, db y api
 Terminal 1 — API (puerto 8787):
 
 ```bash
-npm run dev:api
+pnpm run dev:api    # equivalente: pnpm --filter @ff/api run dev
 ```
 
 Terminal 2 — Web (puerto 3000):
 
 ```bash
-npm run dev:web
+pnpm run dev:web    # equivalente: pnpm --filter @ff/web run dev
 ```
 
 Abrir http://localhost:3000 → login `demo` / `demo`.
