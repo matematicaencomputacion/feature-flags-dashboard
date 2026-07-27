@@ -152,6 +152,51 @@ describe("HTTP", () => {
     expect(res.status).toBe(400);
   });
 
+  it("body malformado en POST /flags devuelve 400 y no 500", async () => {
+    const token = await login();
+    const res = await app.request("/flags", {
+      method: "POST",
+      headers: authed(token),
+      body: "{ key: sin_comillas",
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json() as { error: string }).error).toBe("Invalid JSON body");
+  });
+
+  // El schema del PATCH es todo opcional, así que un fallback a {} parsearía
+  // limpio y devolvería 200 ante un body roto.
+  it("body malformado en PATCH /flags/:key devuelve 400 y no muta la flag", async () => {
+    const token = await login();
+    const res = await app.request("/flags/billing_v2", {
+      method: "PATCH",
+      headers: authed(token),
+      body: "no soy json",
+    });
+    expect(res.status).toBe(400);
+    expect((await getFlag("billing_v2"))?.lifecycle).toBe("experimental");
+  });
+
+  it("body malformado en PUT rules devuelve 400 y no pisa las reglas", async () => {
+    const token = await login();
+    const res = await app.request("/flags/billing_v2/rules/production", {
+      method: "PUT",
+      headers: authed(token),
+      body: "{",
+    });
+    expect(res.status).toBe(400);
+    const flag = await getFlag("billing_v2");
+    expect(flag?.rules.find((r) => r.environment === "production")?.rolloutPercent).toBe(10);
+  });
+
+  it("body malformado en /evaluate devuelve 400 y no 500", async () => {
+    const res = await app.request("/evaluate", {
+      method: "POST",
+      headers: json,
+      body: '{"flagKey": }',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("evaluate: force_on gana sobre el rollout", async () => {
     const res = await app.request("/evaluate", {
       method: "POST",

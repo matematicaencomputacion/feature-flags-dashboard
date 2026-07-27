@@ -5,7 +5,7 @@ import {
   SAFE_DEFAULTS,
   evaluateFlag,
 } from "@ff/domain";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { conflict, isUniqueViolation, toHttpResponse } from "./errors";
@@ -28,6 +28,22 @@ import {
 initFlagCache(getFlag);
 
 type Variables = { user: string };
+
+/**
+ * Un body que no es JSON válido es error del cliente: sin esto la excepción de
+ * c.req.json() escapa del handler y Hono responde 500 en vez de 400.
+ */
+async function readJsonBody(
+  c: Context,
+): Promise<{ ok: true; data: unknown } | { ok: false }> {
+  try {
+    return { ok: true, data: await c.req.json() };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const INVALID_JSON = { error: "Invalid JSON body" } as const;
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -93,7 +109,9 @@ app.post("/flags", async (c) => {
       .regex(/^[a-z][a-z0-9_]*$/, "key must be snake_case starting with a letter"),
     safeDefault: z.enum(SAFE_DEFAULTS).optional(),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
@@ -124,7 +142,9 @@ app.patch("/flags/:key", async (c) => {
     cleanupChecklistConfirmed: z.boolean().optional(),
     confirmProduction: z.boolean().optional(),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
@@ -175,7 +195,9 @@ app.put("/flags/:key/rules/:environment", async (c) => {
     ),
     confirmProduction: z.boolean().default(false),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
@@ -210,7 +232,9 @@ app.post("/evaluate", async (c) => {
     tenantId: z.string().min(1),
     userId: z.string().min(1),
   });
-  const parsed = schema.safeParse(await c.req.json());
+  const body = await readJsonBody(c);
+  if (!body.ok) return c.json(INVALID_JSON, 400);
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
