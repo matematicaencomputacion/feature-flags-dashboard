@@ -6,7 +6,7 @@
         "dlx",
         "@xexr/mcp-libsql",
         "--url",
-        "file:///C:/dev/cursor/data/feature-flags.db"
+        "file:///root/dev/feature-flags-dashboard/data/feature-flags.db"
       ],
       "disabledTools": [
         "write-query",

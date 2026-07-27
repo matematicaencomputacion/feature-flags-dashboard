@@ -9,7 +9,7 @@ Definir el schema Drizzle + SQLite/libSQL, migraciones/bootstrap y un seed míni
 - Paquete: `packages/db` (`@ff/db`).
 - Driver: `@libsql/client` + `drizzle-orm` (dialect sqlite).
 - Archivo DB por defecto: `data/feature-flags.db` en la raíz del monorepo.
-- Env: `DATABASE_URL` (ej. `file:C:/dev/cursor/data/feature-flags.db` o `file:../../data/feature-flags.db` relativo al proceso).
+- Env: `DATABASE_URL` (ej. en WSL2/Linux `file:/root/dev/feature-flags-dashboard/data/feature-flags.db`, o `file:../../data/feature-flags.db` relativo al proceso).
 - Dominio de producto (repetido aquí):
   - Ambientes: `dev` | `staging` | `production`
   - Lifecycle: `experimental` | `GA` | `deprecado` | `eliminado`
